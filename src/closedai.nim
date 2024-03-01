@@ -182,6 +182,31 @@ proc createThread*( self: ClosedAi,
   let res = await client.request(uri, params, HttpPost)
   return res.initThread
 
+proc retrieveThread*( self: ClosedAi,
+                      thread_id: string,
+                      ): Future[CAThread] {.async.} =
+  var client = self.newAssistantClient
+  let uri = HOST / "threads" / thread_id
+  let res = await client.request(uri)
+  return res.initThread
+
+proc modifyThread*( self: ClosedAi,
+                    e: CAThread,
+                    ): Future[CAThread] {.async.} =
+  var client = self.newAssistantClient
+  let uri = HOST / "threads" / e.id
+  let params = %*{ "metadata": e.metadata }
+  let res = await client.request(uri, params, HttpPost)
+  return res.initThread
+
+proc deleteThread*( self: ClosedAi,
+                    thread_id: string,
+                    ): Future[JsonNode] {.async.} = # TODO: deletion status
+  var client = self.newAssistantClient
+  let uri = HOST / "threads" / thread_id
+  let res = await client.request(uri, httpMethod = HttpDelete)
+  return res
+
 # Message
 
 proc createMessage*(self: ClosedAi,

@@ -14,9 +14,9 @@
   * [ ] Delete assistant file
 * Threads
   * [x] Create thread
-  * [ ] Retrieve thread
-  * [ ] Modify thread
-  * [ ] Delete thread
+  * [x] Retrieve thread
+  * [x] Modify thread
+  * [x] Delete thread
 * Messages
   * [x] Create message
   * [x] List messages
