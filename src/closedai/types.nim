@@ -5,6 +5,8 @@ import std/[
   tables,
 ]
 
+export tables
+
 
 
 proc toStringTable*(jso: JsonNode,
