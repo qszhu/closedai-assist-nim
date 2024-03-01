@@ -61,14 +61,14 @@ proc initModel*(jso: JsonNode): CAModel =
 # Assistant Tool
 
 type
-  CAToolKind = enum
-    tkCodeInterpreter = "code_interpreter"
-    tkRetrieval = "retrieval"
-    tkFunction = "function"
+  CAToolKind {.pure.} = enum
+    code_interpreter
+    retrieval
+    function
 
   CATool = object
-    case kind*: CAToolKind
-    of tkFunction:
+    case `type`*: CAToolKind
+    of CAToolKind.function:
       description*: string
       name*: string
       parameters*: JsonNode
@@ -76,30 +76,20 @@ type
       discard
 
 proc initTool(jso: JsonNode): CATool =
-  let kind = jso["type"].getStr
-  case kind:
-  of $tkCodeInterpreter:
-    CATool(kind: tkCodeInterpreter)
-  of $tkRetrieval:
-    CATool(kind: tkRetrieval)
-  of $tkFunction:
-    CATool(kind: tkFunction,
+  let `type` = jso["type"].getStr
+  case `type`:
+  of CAToolKind.code_interpreter.symbolName:
+    CATool(`type`: CAToolKind.code_interpreter)
+  of CAToolKind.retrieval.symbolName:
+    CATool(`type`: CAToolKind.retrieval)
+  of CAToolKind.function.symbolName:
+    CATool(`type`: CAToolKind.function,
       description: jso["description"].getStr,
       name: jso["name"].getStr,
       parameters: jso["parameters"],
     )
   else:
-    raise newException(ValueError, "Unknown tool type: " & kind)
-
-proc toJson*(self: CATool): JsonNode =
-  result = %*{ "type": $self.kind }
-  case self.kind:
-  of tkFunction:
-    result["description"] = %*self.description
-    result["name"] = %*self.name
-    result["parameters"] = %*self.parameters
-  else:
-    discard
+    raise newException(ValueError, "Unknown tool type: " & `type`)
 
 # Assistant
 
