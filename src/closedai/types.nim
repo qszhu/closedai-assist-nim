@@ -7,7 +7,8 @@ import std/[
 
 
 
-proc toStringTable*(jso: JsonNode): Table[string, string] =
+proc toStringTable*(jso: JsonNode,
+                    ): Table[string, string] =
   if jso == nil: return
   for k, v in jso.pairs:
     if v.kind != JString:
@@ -30,7 +31,9 @@ type
     last_id*: string
     has_more*: bool
 
-proc initList*[T](jso: JsonNode, fromJson: FromJson[T]): CAList[T] =
+proc initList*[T](jso: JsonNode,
+                  fromJson: FromJson[T],
+                  ): CAList[T] =
   doAssert jso["object"].getStr == "list"
   CAList[T](
     `object`: jso["object"].getStr,
@@ -49,7 +52,8 @@ type
     created*: int64
     owned_by*: string
 
-proc initModel*(jso: JsonNode): CAModel =
+proc initModel*(jso: JsonNode,
+                ): CAModel =
   doAssert jso["object"].getStr == "model"
   CAModel(
     `object`: jso["object"].getStr,
@@ -61,29 +65,30 @@ proc initModel*(jso: JsonNode): CAModel =
 # Assistant Tool
 
 type
-  CAToolKind {.pure.} = enum
+  CAToolType {.pure.} = enum
     code_interpreter
     retrieval
     function
 
-  CATool = object
-    case `type`*: CAToolKind
-    of CAToolKind.function:
+  CATool* = object
+    case `type`*: CAToolType
+    of CAToolType.function:
       description*: string
       name*: string
       parameters*: JsonNode
     else:
       discard
 
-proc initTool(jso: JsonNode): CATool =
+proc initTool(jso: JsonNode,
+              ): CATool =
   let `type` = jso["type"].getStr
   case `type`:
-  of CAToolKind.code_interpreter.symbolName:
-    CATool(`type`: CAToolKind.code_interpreter)
-  of CAToolKind.retrieval.symbolName:
-    CATool(`type`: CAToolKind.retrieval)
-  of CAToolKind.function.symbolName:
-    CATool(`type`: CAToolKind.function,
+  of CAToolType.code_interpreter.symbolName:
+    CATool(`type`: CAToolType.code_interpreter)
+  of CAToolType.retrieval.symbolName:
+    CATool(`type`: CAToolType.retrieval)
+  of CAToolType.function.symbolName:
+    CATool(`type`: CAToolType.function,
       description: jso["description"].getStr,
       name: jso["name"].getStr,
       parameters: jso["parameters"],
@@ -106,7 +111,8 @@ type
     file_ids*: seq[string]
     metadata*: Table[string, string]
 
-proc initAssistant*(jso: JsonNode): CAAssistant =
+proc initAssistant*(jso: JsonNode,
+                    ): CAAssistant =
   doAssert jso["object"].getStr == "assistant"
   CAAssistant(
     `object`: jso["object"].getStr,
@@ -130,7 +136,8 @@ type
     created_at*: int64
     metadata*: Table[string, string]
 
-proc initThread*(jso: JsonNode): CAThread =
+proc initThread*( jso: JsonNode,
+                  ): CAThread =
   doAssert jso["object"].getStr == "thread"
   CAThread(
     `object`: jso["object"].getStr,
@@ -142,19 +149,57 @@ proc initThread*(jso: JsonNode): CAThread =
 # Message
 
 type
+  CAMessageContentType {.pure.} = enum
+    image_file
+    text
+
+  CAMessageContentText = object
+    value: string
+    annotations: seq[JsonNode] # TODO
+
+  CAMessageContent = object
+    case `type`: CAMessageContentType
+    of CAMessageContentType.image_file:
+      image_file: JsonNode # TODO
+    of CAMessageContentType.text:
+      text: CAMessageContentText
+
+proc initMessageContentText(jso: JsonNode,
+                            ): CAMessageContentText =
+  CAMessageContentText( value: jso["value"].getStr,
+                        annotations: jso["annotations"].getElems
+                        )
+
+proc initMessageContent(jso: JsonNode,
+                        ): CAMessageContent =
+  let `type` = jso["type"].getStr
+  case `type`:
+  of CAMessageContentType.image_file.symbolName:
+    CAMessageContent( `type`: CAMessageContentType.image_file,
+                      image_file: jso["image_file"],
+                      )
+  of CAMessageContentType.text.symbolName:
+    CAMessageContent( `type`: CAMessageContentType.text,
+                      text: jso["text"].initMessageContentText,
+                      )
+  else:
+    raise newException(ValueError, "Unknown message content type: " & `type`)
+
+type
   CAMessage* = object
     `object`*: string
     id*: string
     created_at*: int64
     thread_id*: string
     role*: string
-    content*: seq[JsonNode] # TODO
+    content*: seq[CAMessageContent]
     assistant_id*: string
     run_id*: string
     file_ids*: seq[string]
     metadata*: Table[string, string]
 
-proc initMessage*(jso: JsonNode): CAMessage =
+proc initMessage*(jso: JsonNode
+                  ): CAMessage =
   doAssert jso["object"].getStr == "thread.message"
   CAMessage(
     `object`: jso["object"].getStr,
@@ -162,7 +207,7 @@ proc initMessage*(jso: JsonNode): CAMessage =
     created_at: jso["created_at"].getBiggestInt,
     thread_id: jso["thread_id"].getStr,
     role: jso["role"].getStr,
-    content: jso["content"].getElems,
+    content: jso["content"].getElems.mapIt(it.initMessageContent),
     assistant_id: jso{"assistant_id"}.getStr,
     run_id: jso{"run_id"}.getStr,
     file_ids: jso["file_ids"].getElems.mapIt(it.getStr),
@@ -204,7 +249,8 @@ type
     metadata*: Table[string, string]
     usage*: JsonNode # TODO
 
-proc initRun*(jso: JsonNode): CARun =
+proc initRun*(jso: JsonNode
+              ): CARun =
   doAssert jso["object"].getStr == "thread.run"
   CARun(
     `object`: jso["object"].getStr,
@@ -261,7 +307,8 @@ type
     metadata*: Table[string, string]
     usage*: JsonNode # TODO
 
-proc initRunStep*(jso: JsonNode): CARunStep =
+proc initRunStep*(jso: JsonNode
+                  ): CARunStep =
   doAssert jso["object"].getStr == "thread.run.step"
   CARunStep(
     `object`: jso["object"].getStr,

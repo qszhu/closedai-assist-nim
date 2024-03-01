@@ -21,10 +21,10 @@ type
     apiKey, organization, user: string
     proxy: Proxy
 
-proc newClosedAi* ( apiKey: string,
-                    organization = "",
-                    user = "",
-                    proxy: Proxy = nil,
+proc newClosedAi*(apiKey: string,
+                  organization = "",
+                  user = "",
+                  proxy: Proxy = nil,
                   ): ClosedAi =
   result.new
   result.apiKey = apiKey
@@ -33,7 +33,7 @@ proc newClosedAi* ( apiKey: string,
   result.proxy = proxy
 
 proc newClient( self: ClosedAi,
-              ): AsyncHttpClient =
+                ): AsyncHttpClient =
   result = newAsyncHttpClient(proxy = self.proxy)
   result.headers = newHttpHeaders({
     "Content-Type": "application/json",
@@ -46,7 +46,7 @@ proc request( client: AsyncHttpClient,
               url: Uri,
               params: JsonNode = %*{},
               httpMethod = HttpGet,
-            ): Future[JsonNode] {.async.} =
+              ): Future[JsonNode] {.async.} =
   var url = url
   var body = ""
 
@@ -74,10 +74,10 @@ type
     after*: string
     before*: string
 
-proc initListOptions* ( limit = 20,
-                        order = "desc",
-                        after = "",
-                        before = ""
+proc initListOptions*(limit = 20,
+                      order = "desc",
+                      after = "",
+                      before = ""
                       ): CAListOptions {.inline.} =
   CAListOptions(
     limit: limit,
@@ -86,7 +86,7 @@ proc initListOptions* ( limit = 20,
     before: before,
   )
 
-proc toParams ( self: CAListOptions,
+proc toParams(self: CAListOptions,
               ): JsonNode =
   result = %*{ "limit": self.limit, "order": self.order }
   if self.after.len > 0:
@@ -94,24 +94,15 @@ proc toParams ( self: CAListOptions,
   if self.before.len > 0:
     result["before"] = %*self.before
 
-# Models
-
-proc listModels*( self: ClosedAi
-                ): Future[CAList[CAModel]] {.async.} =
-  var client = self.newClient
-  let url = HOST / "models"
-  let res = await client.request(url)
-  return initList[CAModel](res, initModel)
-
 # Assistants
 
-proc newAssistantClient ( self: ClosedAi
+proc newAssistantClient(self: ClosedAi
                         ): AsyncHttpClient =
   result = self.newClient
   result.headers["OpenAI-Beta"] = "assistants=v1"
 
-proc createAssistant* ( self: ClosedAi,
-                        e: CAAssistant,
+proc createAssistant*(self: ClosedAi,
+                      e: CAAssistant,
                       ): Future[CAAssistant] {.async.} =
   var client = self.newAssistantClient
 
@@ -136,23 +127,23 @@ proc createAssistant* ( self: ClosedAi,
 
 proc listAssistants*( self: ClosedAi,
                       opts = initListOptions(),
-                    ): Future[CAList[CAAssistant]] {.async.} =
+                      ): Future[CAList[CAAssistant]] {.async.} =
   var client = self.newAssistantClient
   let uri = HOST / "assistants"
   let params = opts.toParams
   let resp = await client.request(uri, params)
   return initList[CAAssistant](resp, initAssistant)
 
-proc retrieveAssistant* ( self: ClosedAi,
-                          assistantId: string,
+proc retrieveAssistant*(self: ClosedAi,
+                        assistantId: string,
                         ): Future[CAAssistant] {.async.} =
   var client = self.newAssistantClient
   let uri = HOST / "assistants" / assistantId
   let res = await client.request(uri)
   return res.initAssistant
 
-proc modifyAssistant* ( self: ClosedAi,
-                        e: CAAssistant,
+proc modifyAssistant*(self: ClosedAi,
+                      e: CAAssistant,
                       ): Future[CAAssistant] {.async.} =
   var client = self.newAssistantClient
   let uri = HOST / "assistants" / e.id
@@ -170,38 +161,43 @@ proc modifyAssistant* ( self: ClosedAi,
 
 # Thread
 
+type
+  CAMessageParam* = object
+    role*: string
+    content*: string
+    file_ids*: seq[string]
+    metadata*: Table[string, string]
+
+
 proc createThread*( self: ClosedAi,
-                  ): Future[CAThread] {.async.} =
+                    messages: seq[CAMessageParam] = @[],
+                    metadata: Table[string, string] = initTable[string, string](),
+                    ): Future[CAThread] {.async.} =
   var client = self.newAssistantClient
   let uri = HOST / "threads"
-  var params = %*{} # TODO
+  var params = %*{
+    "messages": messages,
+    "metadata": metadata,
+  }
   let res = await client.request(uri, params, HttpPost)
   return res.initThread
 
 # Message
 
-proc createMessage* ( self: ClosedAi,
-                      thread_id, role, content: string,
-                      file_ids: seq[string] = @[],
-                      metadata: Table[string, string] = initTable[string, string](),
+proc createMessage*(self: ClosedAi,
+                    thread_id: string,
+                    msg: CAMessageParam,
                     ): Future[CAMessage] {.async.} =
   var client = self.newAssistantClient
-
   let uri = HOST / "threads" / thread_id / "messages"
-
-  var params = %*{ "role": role, "content": content }
-  if file_ids.len > 0:
-    params["file_ids"] = %*file_ids
-  if metadata.len > 0:
-    params["metadata"] = %*metadata
-
+  var params = %*msg
   let res = await client.request(uri, params, HttpPost)
   return res.initMessage
 
 proc listMessages*( self: ClosedAi,
                     thread_id: string,
                     opts = initListOptions()
-                  ): Future[CAList[CAMessage]] {.async.} =
+                    ): Future[CAList[CAMessage]] {.async.} =
   var client = self.newAssistantClient
   let uri = HOST / "threads" / thread_id / "messages"
   let params = opts.toParams
@@ -210,27 +206,44 @@ proc listMessages*( self: ClosedAi,
 
 # Run
 
-proc createRun* ( self: ClosedAi,
-                  thread_id, assistant_id: string,
+proc createRun*(self: ClosedAi,
+                thread_id, assistant_id: string,
+                model = "",
+                instructions = "",
+                additional_instructions = "",
+                tools: seq[CATool] = @[],
+                metadata: Table[string, string] = initTable[string, string](),
                 ): Future[CARun] {.async.} =
   var client = self.newAssistantClient
   let uri = HOST / "threads" / thread_id / "runs"
-  let params = %*{ "assistant_id": assistant_id } # TODO
+
+  let params = %*{ "assistant_id": assistant_id }
+  if model.len > 0:
+    params["model"] = %*(model)
+  if instructions.len > 0:
+    params["instructions"] = %*(instructions)
+  if additional_instructions.len > 0:
+    params["additional_instructions"] = %*(additional_instructions)
+  if tools.len > 0:
+    params["tools"] = %*(tools)
+  if metadata.len > 0:
+    params["metadata"] = %*(metadata)
+
   let resp = await client.request(uri, params, HttpPost)
   return initRun(resp)
 
 proc listRuns*( self: ClosedAi,
                 thread_id: string,
                 opts = initListOptions(),
-              ): Future[CAList[CARun]] {.async.} =
+                ): Future[CAList[CARun]] {.async.} =
   var client = self.newAssistantClient
   let uri = HOST / "threads" / thread_id / "runs"
   let params = opts.toParams
   let resp = await client.request(uri, params)
   return initList[CARun](resp, initRun)
 
-proc retrieveRun* ( self: ClosedAi,
-                    thread_id, run_id: string,
+proc retrieveRun*(self: ClosedAi,
+                  thread_id, run_id: string,
                   ): Future[CARun] {.async.} =
   var client = self.newAssistantClient
   let uri = HOST / "threads" / thread_id / "runs" / run_id
@@ -240,9 +253,18 @@ proc retrieveRun* ( self: ClosedAi,
 proc listRunSteps*( self: ClosedAi,
                     thread_id, run_id: string,
                     opts = initListOptions(),
-                  ): Future[CAList[CARunStep]] {.async.} =
+                    ): Future[CAList[CARunStep]] {.async.} =
   var client = self.newAssistantClient
   let uri = HOST / "threads" / thread_id / "runs" / run_id / "steps"
   let params = opts.toParams
   let resp = await client.request(uri, params)
   return initList[CARunStep](resp, initRunStep)
+
+# Models
+
+proc listModels*( self: ClosedAi
+                  ): Future[CAList[CAModel]] {.async.} =
+  var client = self.newClient
+  let url = HOST / "models"
+  let res = await client.request(url)
+  return initList[CAModel](res, initModel)
