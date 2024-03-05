@@ -45,6 +45,22 @@ proc initList*[T](jso: JsonNode,
     has_more: jso{"has_more"}.getBool,
   )
 
+# Delete
+
+type
+  CADelete* = object
+    `object`*: string
+    id*: string
+    deleted*: bool
+
+proc initDelete*( jso: JsonNode
+                  ): CADelete =
+  CADelete(
+    `object`: jso["object"].getStr,
+    id: jso["id"].getStr,
+    deleted: jso["deleted"].getBool,
+  )
+
 # Model
 
 type

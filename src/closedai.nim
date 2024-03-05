@@ -159,6 +159,14 @@ proc modifyAssistant*(self: ClosedAi,
   let res = await client.request(uri, params, HttpPost)
   return res.initAssistant
 
+proc deleteAssistant*(self: ClosedAi,
+                      assistantId: string,
+                      ): Future[CADelete] {.async.} =
+  var client = self.newAssistantClient
+  let uri = HOST / "assistants" / assistantId
+  let res = await client.request(uri, httpMethod = HttpDelete)
+  return res.initDelete
+
 # Thread
 
 type
@@ -201,11 +209,11 @@ proc modifyThread*( self: ClosedAi,
 
 proc deleteThread*( self: ClosedAi,
                     thread_id: string,
-                    ): Future[JsonNode] {.async.} = # TODO: deletion status
+                    ): Future[CADelete] {.async.} =
   var client = self.newAssistantClient
   let uri = HOST / "threads" / thread_id
   let res = await client.request(uri, httpMethod = HttpDelete)
-  return res
+  return res.initDelete
 
 # Message
 

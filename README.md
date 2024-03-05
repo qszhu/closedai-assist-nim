@@ -10,7 +10,7 @@
   * [x] Retrieve assistant
   * [ ] Retrive assistant file
   * [x] Modify assistant
-  * [ ] Delete assistant
+  * [x] Delete assistant
   * [ ] Delete assistant file
 * Threads
   * [x] Create thread
