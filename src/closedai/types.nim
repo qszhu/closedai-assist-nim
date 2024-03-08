@@ -97,7 +97,7 @@ type
     else:
       discard
 
-proc initTool(jso: JsonNode,
+proc initTool*(jso: JsonNode,
               ): CATool =
   let `type` = jso["type"].getStr
   case `type`:
