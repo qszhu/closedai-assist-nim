@@ -39,3 +39,8 @@
   * [ ] Retrieve model
   * [ ] Delete a fine-tuned model
 * Files
+  * [x] Upload file
+  * [x] List files
+  * [ ] Retrieve file
+  * [ ] Delete file
+  * [ ] Retrieve file content

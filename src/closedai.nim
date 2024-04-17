@@ -2,6 +2,7 @@ import std/[
   asyncdispatch,
   httpclient,
   json,
+  options,
   sequtils,
   strformat,
   tables,
@@ -46,11 +47,15 @@ proc request( client: AsyncHttpClient,
               url: Uri,
               params: JsonNode = %*{},
               httpMethod = HttpGet,
+              multipart: MultipartData = nil,
               ): Future[JsonNode] {.async.} =
   var url = url
   var body = ""
+  var httpMethod = httpMethod
 
-  if httpMethod == HttpGet or httpMethod == HttpDelete:
+  if multipart != nil:
+    httpMethod = HttpPost
+  elif httpMethod == HttpGet or httpMethod == HttpDelete:
     url = url ? params.toStringTable.pairs.toSeq
   elif httpMethod == HttpPost or httpMethod == HttpPut:
     body = $params
@@ -59,7 +64,8 @@ proc request( client: AsyncHttpClient,
     resp = await client.request(
       url = url,
       httpMethod = httpMethod,
-      body = body
+      body = body,
+      multipart = multipart,
     )
     respBody = await resp.body
   let jso = respBody.parseJson
@@ -94,6 +100,39 @@ proc toParams(self: CAListOptions,
   if self.before.len > 0:
     result["before"] = %*self.before
 
+# Files
+
+proc uploadFile*( self: ClosedAi,
+                  fileName: string,
+                  purpose: CAFilePurpose
+                ): Future[CAFile] {.async.} =
+  var client = self.newClient
+
+  let url = HOST / "files"
+
+  var form = newMultipartData()
+  form.addFiles({ "file": fileName })
+  form["purpose"] = $purpose
+
+  let resp = await client.request(url, multipart = form)
+  return resp.initFile
+
+proc listFiles*(self: ClosedAi,
+                purpose: Option[CAFilePurpose] = none(CAFilePurpose),
+                ): Future[CAList[CAFile]] {.async.} =
+  var client = self.newClient
+
+  let url = HOST / "files"
+
+  var params = %*{}
+  if purpose.isSome:
+    params["purpose"] = %*($purpose.get)
+
+  let resp = await client.request(url, params)
+  return initList[CAFile](resp, initFile)
+
+
+
 # Assistants
 
 proc newAssistantClient(self: ClosedAi
@@ -122,8 +161,21 @@ proc createAssistant*(self: ClosedAi,
   if e.metadata.len > 0:
     params["metadata"] = %*(e.metadata)
 
-  let res = await client.request(uri, params, HttpPost)
-  return res.initAssistant
+  let resp = await client.request(uri, params, HttpPost)
+  return resp.initAssistant
+
+proc createAssistantFile*(self: ClosedAi,
+                          assistant_id: string,
+                          file_id: string,
+                          ): Future[CAAssistantFile] {.async.} =
+  var client = self.newAssistantClient
+
+  let uri = HOST / "assistants" / assistant_id / "files"
+
+  var params = %*{ "file_id": file_id }
+
+  let resp = await client.request(uri, params, HttpPost)
+  return resp.initAssistantFile
 
 proc listAssistants*( self: ClosedAi,
                       opts = initListOptions(),
@@ -139,8 +191,8 @@ proc retrieveAssistant*(self: ClosedAi,
                         ): Future[CAAssistant] {.async.} =
   var client = self.newAssistantClient
   let uri = HOST / "assistants" / assistantId
-  let res = await client.request(uri)
-  return res.initAssistant
+  let resp = await client.request(uri)
+  return resp.initAssistant
 
 proc modifyAssistant*(self: ClosedAi,
                       e: CAAssistant,
@@ -156,16 +208,16 @@ proc modifyAssistant*(self: ClosedAi,
     "file_ids": e.file_ids,
     "metadata": e.metadata,
   }
-  let res = await client.request(uri, params, HttpPost)
-  return res.initAssistant
+  let resp = await client.request(uri, params, HttpPost)
+  return resp.initAssistant
 
 proc deleteAssistant*(self: ClosedAi,
                       assistantId: string,
                       ): Future[CADelete] {.async.} =
   var client = self.newAssistantClient
   let uri = HOST / "assistants" / assistantId
-  let res = await client.request(uri, httpMethod = HttpDelete)
-  return res.initDelete
+  let resp = await client.request(uri, httpMethod = HttpDelete)
+  return resp.initDelete
 
 # Thread
 
@@ -187,16 +239,16 @@ proc createThread*( self: ClosedAi,
     "messages": messages,
     "metadata": metadata,
   }
-  let res = await client.request(uri, params, HttpPost)
-  return res.initThread
+  let resp = await client.request(uri, params, HttpPost)
+  return resp.initThread
 
 proc retrieveThread*( self: ClosedAi,
                       thread_id: string,
                       ): Future[CAThread] {.async.} =
   var client = self.newAssistantClient
   let uri = HOST / "threads" / thread_id
-  let res = await client.request(uri)
-  return res.initThread
+  let resp = await client.request(uri)
+  return resp.initThread
 
 proc modifyThread*( self: ClosedAi,
                     e: CAThread,
@@ -204,16 +256,16 @@ proc modifyThread*( self: ClosedAi,
   var client = self.newAssistantClient
   let uri = HOST / "threads" / e.id
   let params = %*{ "metadata": e.metadata }
-  let res = await client.request(uri, params, HttpPost)
-  return res.initThread
+  let resp = await client.request(uri, params, HttpPost)
+  return resp.initThread
 
 proc deleteThread*( self: ClosedAi,
                     thread_id: string,
                     ): Future[CADelete] {.async.} =
   var client = self.newAssistantClient
   let uri = HOST / "threads" / thread_id
-  let res = await client.request(uri, httpMethod = HttpDelete)
-  return res.initDelete
+  let resp = await client.request(uri, httpMethod = HttpDelete)
+  return resp.initDelete
 
 # Message
 
@@ -224,8 +276,8 @@ proc createMessage*(self: ClosedAi,
   var client = self.newAssistantClient
   let uri = HOST / "threads" / thread_id / "messages"
   var params = %*msg
-  let res = await client.request(uri, params, HttpPost)
-  return res.initMessage
+  let resp = await client.request(uri, params, HttpPost)
+  return resp.initMessage
 
 proc listMessages*( self: ClosedAi,
                     thread_id: string,
@@ -299,5 +351,5 @@ proc listModels*( self: ClosedAi
                   ): Future[CAList[CAModel]] {.async.} =
   var client = self.newClient
   let url = HOST / "models"
-  let res = await client.request(url)
-  return initList[CAModel](res, initModel)
+  let resp = await client.request(url)
+  return initList[CAModel](resp, initModel)

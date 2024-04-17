@@ -61,6 +61,58 @@ proc initDelete*( jso: JsonNode
     deleted: jso["deleted"].getBool,
   )
 
+# File
+
+type
+  CAFilePurpose* {.pure.} = enum
+    `fine-tune`
+    `fine-tune-results`
+    assistants
+    `assistants-output`
+
+type
+  CAFile* = object
+    `object`*: string
+    id*: string
+    bytes*: int
+    created_at*: int64
+    filename*: string
+    purpose*: CAFilePurpose
+
+proc initFile*(jso: JsonNode,
+              ): CAFile =
+  doAssert jso["object"].getStr == "file"
+  CAFile(
+    `object`: jso["object"].getStr,
+    id: jso["id"].getStr,
+    bytes: jso["bytes"].getInt,
+    created_at: jso["created_at"].getBiggestInt,
+    filename: jso["filename"].getStr,
+    purpose: case jso["purpose"].getStr:
+              of CAFilePurpose.`fine-tune`.symbolName: CAFilePurpose.`fine-tune`
+              of CAFilePurpose.`fine-tune-results`.symbolName: CAFilePurpose.`fine-tune-results`
+              of CAFilePurpose.assistants.symbolName: CAFilePurpose.assistants
+              of CAFilePurpose.`assistants-output`.symbolName: CAFilePurpose.`assistants-output`
+              else: raise newException(ValueError, "Unknown file purpose: " & jso["purpose"].getStr)
+  )
+
+type
+  CAAssistantFile* = object
+   `object`*: string
+   id*: string
+   created_at*: int64
+   assistant_id*: string
+
+proc initAssistantFile*(jso: JsonNode,
+                        ): CAAssistantFile =
+  doAssert jso["object"].getStr == "assistant.file"
+  CAAssistantFile(
+    `object`: jso["object"].getStr,
+    id: jso["id"].getStr,
+    created_at: jso["created_at"].getBiggestInt,
+    assistant_id: jso["assistant_id"].getStr,
+  )
+
 # Model
 
 type
@@ -83,7 +135,7 @@ proc initModel*(jso: JsonNode,
 # Assistant Tool
 
 type
-  CAToolType {.pure.} = enum
+  CAToolType* {.pure.} = enum
     code_interpreter
     retrieval
     function
