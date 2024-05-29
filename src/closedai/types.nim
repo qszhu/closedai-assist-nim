@@ -137,17 +137,24 @@ proc initModel*(jso: JsonNode,
 type
   CAToolType* {.pure.} = enum
     code_interpreter
-    retrieval
     function
+    file_search
+
+  CAToolFunction* = object
+    description*: string
+    name*: string
+    parameters*: JsonNode
 
   CATool* = object
     case `type`*: CAToolType
     of CAToolType.function:
-      description*: string
-      name*: string
-      parameters*: JsonNode
+      function*: CAToolFunction
     else:
       discard
+
+  CAToolOutput* = object
+    tool_call_id*: string
+    output*: string
 
 proc initTool*(jso: JsonNode,
               ): CATool =
@@ -155,13 +162,15 @@ proc initTool*(jso: JsonNode,
   case `type`:
   of CAToolType.code_interpreter.symbolName:
     CATool(`type`: CAToolType.code_interpreter)
-  of CAToolType.retrieval.symbolName:
-    CATool(`type`: CAToolType.retrieval)
+  of CAToolType.file_search.symbolName:
+    CATool(`type`: CAToolType.file_search)
   of CAToolType.function.symbolName:
     CATool(`type`: CAToolType.function,
-      description: jso["description"].getStr,
-      name: jso["name"].getStr,
-      parameters: jso["parameters"],
+      function: CAToolFunction(
+        description: jso["function"]["description"].getStr,
+        name: jso["function"]["name"].getStr,
+        parameters: jso["function"]["parameters"],
+      )
     )
   else:
     raise newException(ValueError, "Unknown tool type: " & `type`)
@@ -219,20 +228,20 @@ proc initThread*( jso: JsonNode,
 # Message
 
 type
-  CAMessageContentType {.pure.} = enum
+  CAMessageContentType* {.pure.} = enum
     image_file
     text
 
-  CAMessageContentText = object
-    value: string
-    annotations: seq[JsonNode] # TODO
+  CAMessageContentText* = object
+    value*: string
+    annotations*: seq[JsonNode] # TODO
 
-  CAMessageContent = object
-    case `type`: CAMessageContentType
+  CAMessageContent* = object
+    case `type`*: CAMessageContentType
     of CAMessageContentType.image_file:
-      image_file: JsonNode # TODO
+      image_file*: JsonNode # TODO
     of CAMessageContentType.text:
-      text: CAMessageContentText
+      text*: CAMessageContentText
 
 proc initMessageContentText(jso: JsonNode,
                             ): CAMessageContentText =
@@ -280,7 +289,7 @@ proc initMessage*(jso: JsonNode
     content: jso["content"].getElems.mapIt(it.initMessageContent),
     assistant_id: jso{"assistant_id"}.getStr,
     run_id: jso{"run_id"}.getStr,
-    file_ids: jso["file_ids"].getElems.mapIt(it.getStr),
+    # file_ids: jso["file_ids"].getElems.mapIt(it.getStr), # TODO: attachments
     metadata: jso["metadata"].toStringTable,
   )
 
@@ -339,7 +348,7 @@ proc initRun*(jso: JsonNode
     model: jso["model"].getStr,
     instructions: jso["instructions"].getStr,
     tools: jso["tools"].getElems.mapIt(it.initTool),
-    file_ids: jso["file_ids"].getElems.mapIt(it.getStr),
+    # file_ids: jso["file_ids"].getElems.mapIt(it.getStr), # TODO: attachments
     metadata: jso["metadata"].toStringTable,
     usage: jso["usage"],
   )

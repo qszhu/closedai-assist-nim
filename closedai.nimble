@@ -1,6 +1,6 @@
 # Package
 
-version       = "0.1.7"
+version       = "0.2.0"
 author        = "qszhu"
 description   = "ClosedAI Assistant API library for Nim"
 license       = "MIT"

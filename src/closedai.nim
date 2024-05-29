@@ -135,10 +135,11 @@ proc listFiles*(self: ClosedAi,
 
 # Assistants
 
-proc newAssistantClient(self: ClosedAi
+proc newAssistantClient(self: ClosedAi,
+                        version = "v2"
                         ): AsyncHttpClient =
   result = self.newClient
-  result.headers["OpenAI-Beta"] = "assistants=v1"
+  result.headers["OpenAI-Beta"] = "assistants=" & version
 
 proc createAssistant*(self: ClosedAi,
                       e: CAAssistant,
@@ -225,7 +226,7 @@ type
   CAMessageParam* = object
     role*: string
     content*: string
-    file_ids*: seq[string]
+    # file_ids*: seq[string] # TODO: attachments
     metadata*: Table[string, string]
 
 
@@ -298,6 +299,7 @@ proc createRun*(self: ClosedAi,
                 additional_instructions = "",
                 tools: seq[CATool] = @[],
                 metadata: Table[string, string] = initTable[string, string](),
+                tool_choice = "", # TODO: tool type
                 ): Future[CARun] {.async.} =
   var client = self.newAssistantClient
   let uri = HOST / "threads" / thread_id / "runs"
@@ -313,6 +315,11 @@ proc createRun*(self: ClosedAi,
     params["tools"] = %*(tools)
   if metadata.len > 0:
     params["metadata"] = %*(metadata)
+  if tool_choice.len > 0:
+    try:
+      params["tool_choice"] = tool_choice.parseJson
+    except:
+      params["tool_choice"] = %*tool_choice
 
   let resp = await client.request(uri, params, HttpPost)
   return initRun(resp)
@@ -344,6 +351,15 @@ proc listRunSteps*( self: ClosedAi,
   let params = opts.toParams
   let resp = await client.request(uri, params)
   return initList[CARunStep](resp, initRunStep)
+
+proc submitToolOutputs*(self: ClosedAi,
+                        thread_id, run_id: string,
+                        tool_outputs: seq[CAToolOutput]): Future[CARun] {.async.} =
+  var client = self.newAssistantClient
+  let uri = HOST / "threads" / thread_id / "runs" / run_id / "submit_tool_outputs"
+  let params = %*{ "tool_outputs": tool_outputs }
+  let resp = await client.request(uri, params, HttpPost)
+  return initRun(resp)
 
 # Models
 
